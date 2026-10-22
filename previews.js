@@ -200,15 +200,18 @@
   };
 
   // ---- Spirometry lab (loop + 4 steps)
-  const spExp = (shape, pef, x) => { const rise = shape === 'fixed_upper' ? 0.08 : 0.10; if (x <= rise) return pef * x / rise; const t = (x - rise) / (1 - rise);
-    return shape === 'obstructive' ? pef * Math.pow(1 - t, 2.4) : shape === 'restrictive' ? pef * Math.pow(1 - t, 0.9) : shape === 'fixed_upper' ? pef * Math.min(1, (1 - t) / 0.15) : pef * (1 - t); };
-  const spIns = (shape, pif, x) => shape === 'fixed_upper' ? -pif * Math.min(1, 6 * Math.min(x, 1 - x)) : -pif * Math.sqrt(Math.max(0, 4 * x * (1 - x)));
+  const spExp = (shape, pef, x) => { const rise = (shape === 'fixed_upper' || shape === 'variable_intrathoracic') ? 0.08 : 0.10; if (x <= rise) return pef * x / rise; const t = (x - rise) / (1 - rise);
+    return shape === 'obstructive' ? pef * Math.pow(1 - t, 2.4) : shape === 'restrictive' ? pef * Math.pow(1 - t, 0.9) : (shape === 'fixed_upper' || shape === 'variable_intrathoracic') ? pef * Math.min(1, (1 - t) / 0.15) : pef * (1 - t); };
+  const spIns = (shape, pif, x) => (shape === 'fixed_upper' || shape === 'variable_extrathoracic') ? -pif * Math.min(1, 6 * Math.min(x, 1 - x)) : -pif * Math.sqrt(Math.max(0, 4 * x * (1 - x)));
   const spPts = (l, n = 60) => { const o = []; for (let i = 0; i <= n; i++) { const x = i / n; o.push([x * l.fvc, spExp(l.shape, l.pef, x)]); } for (let i = 0; i <= n; i++) { const x = 1 - i / n; o.push([x * l.fvc, spIns(l.shape, l.pif, x)]); } return o; };
   window.initSpiro = function (root, data) {
     const box = $(root); let ci = 0, step = 0, wrong = [], notes = [];
-    function solve(c) { const v = c.values, ratio = v.fev1 / v.fvc; const pattern = c.loop.shape === 'fixed_upper' ? 'fixedUpper' : ratio < 0.7 ? 'obstructive' : v.fvcpct < 80 ? 'restrictive' : 'normal';
-      let rev = 'notTested'; if (v.postFev1 != null) { const d = v.postFev1 - v.fev1; rev = (d >= 0.2 && d / v.fev1 * 100 >= 12) ? 'yes' : 'no'; }
-      return { ratio, pattern, rev, dlco: v.dlcopct == null ? 'notMeasured' : v.dlcopct < 80 ? 'low' : 'normal' }; }
+    function solve(c) { const v = c.values, ratio = v.fev1 / v.fvc, limit = v.lln != null ? v.lln : 0.7, sh = c.loop.shape;
+      const pattern = sh === 'fixed_upper' ? 'fixedUpper' : sh === 'variable_extrathoracic' ? 'variableExtrathoracic' : sh === 'variable_intrathoracic' ? 'variableIntrathoracic'
+        : ratio < limit ? ((v.tlcpct != null ? v.tlcpct : 100) < 80 ? 'mixed' : 'obstructive') : ((v.tlcpct != null ? v.tlcpct : v.fvcpct) < 80 ? 'restrictive' : 'normal');
+      let rev = 'notTested', dpp = null; if (v.postFev1 != null) { const d = v.postFev1 - v.fev1, pred = v.fev1 / (v.fev1pct / 100); dpp = d / pred * 100; rev = c.bdRule === 'ats2022' ? (dpp > 10 ? 'yes' : 'no') : ((d >= 0.2 && d / v.fev1 * 100 >= 12) ? 'yes' : 'no'); }
+      const corrected = (v.dlcopct != null && v.hb != null && v.sex) ? v.dlcopct * ((v.sex === 'f' ? 9.38 : 10.22) + v.hb) / (1.7 * v.hb) : null, dv = corrected != null ? corrected : v.dlcopct;
+      return { ratio, limit, pattern, rev, dpp, corrected, dlco: dv == null ? 'notMeasured' : dv < 80 ? 'low' : dv > 120 ? 'high' : 'normal' }; }
     function svg(c) {
       const v = c.values, fp = v.fvc / (v.fvcpct / 100), pred = { shape: 'normal', fvc: fp, pef: 9.5 * fp / 4, pif: 5.2 * fp / 4 };
       const maxV = Math.max(c.loop.fvc, pred.fvc) * 1.08, maxF = Math.max(c.loop.pef, pred.pef) * 1.12, minF = -Math.max(c.loop.pif, pred.pif) * 1.15, W = 520, H = 250;
@@ -218,19 +221,36 @@
     }
     function choices(c, s) {
       const sol = solve(c);
-      if (s === 0) return [['normal', 'Normal'], ['obstructive', 'Obstructive'], ['restrictive', 'Restrictive'], ['fixedUpper', 'Fixed upper airway obstruction (flat-topped loop)']].map(([k, t]) => [t, k === sol.pattern]);
-      if (s === 1) return [['yes', 'Significant (FEV1 up 12% and 200 mL or more)'], ['no', 'Not significant'], ['notTested', 'Not tested']].map(([k, t]) => [t, k === sol.rev]);
-      if (s === 2) return [['low', 'Reduced (below 80% predicted)'], ['normal', 'Normal'], ['notMeasured', 'Not measured']].map(([k, t]) => [t, k === sol.dlco]);
-      const others = shuffle(data.cases.filter(x => x.id !== c.id)).slice(0, 3).map(x => x.cause); return shuffle([c.cause].concat(others)).map(t => [t, t === c.cause]);
+      if (s === 0) { const airway = ['fixedUpper', 'variableExtrathoracic', 'variableIntrathoracic'].includes(sol.pattern); const all = [['normal', 'Normal'], ['obstructive', 'Obstructive'], ['restrictive', 'Restrictive']];
+        if (!airway && (c.values.tlcpct != null || sol.pattern === 'mixed')) all.push(['mixed', 'Mixed obstructive and restrictive (low ratio and low total lung capacity)']);
+        all.push(['fixedUpper', 'Fixed upper airway obstruction (flat-topped loop)']);
+        if (airway) { all.push(['variableExtrathoracic', 'Variable extrathoracic obstruction (flattened inspiratory limb)']); all.push(['variableIntrathoracic', 'Variable intrathoracic obstruction (flattened expiratory limb)']); }
+        return all.map(([k, t]) => [t, k === sol.pattern]); }
+      if (s === 1) return [['yes', c.bdRule === 'ats2022' ? 'Significant (FEV1 up more than 10% of the predicted value)' : 'Significant (FEV1 up 12% and 200 mL or more)'], ['no', 'Not significant'], ['notTested', 'Not tested']].map(([k, t]) => [t, k === sol.rev]);
+      if (s === 2) return [['low', 'Reduced (below 80% predicted)'], ['normal', 'Normal'], ['high', 'Raised (above 120% predicted)'], ['notMeasured', 'Not measured']].map(([k, t]) => [t, k === sol.dlco]);
+      const mine = c.group || c.id; const others = shuffle(data.cases.filter(x => (x.group || x.id) !== mine && x.cause !== c.cause)).slice(0, 3).map(x => x.cause); return shuffle([c.cause].concat(others)).map(t => [t, t === c.cause]);
     }
     const titles = ['1 · Pattern', '2 · Bronchodilator response', '3 · Gas transfer (DLCO)', '4 · Diagnosis'];
-    const explain = (c, s) => { const sol = solve(c), v = c.values; if (s === 0) return `FEV1/FVC = ${v.fev1.toFixed(2)} / ${v.fvc.toFixed(2)} = ${sol.ratio.toFixed(2)}; FVC ${v.fvcpct}% predicted. Pattern: ${sol.pattern === 'fixedUpper' ? 'fixed upper airway obstruction (flat-topped loop, very low peak flow)' : sol.pattern}.`;
-      if (s === 1) return v.postFev1 != null ? `FEV1 changed by ${(v.postFev1 - v.fev1).toFixed(2)} L (${((v.postFev1 - v.fev1) / v.fev1 * 100).toFixed(0)}%): ${sol.rev === 'yes' ? 'significant' : 'not significant'}.` : 'No post-bronchodilator test was done.';
-      if (s === 2) return v.dlcopct != null ? `DLCO ${v.dlcopct}% of predicted: ${sol.dlco === 'low' ? 'reduced' : 'normal'}.` : 'DLCO was not measured.'; return c.teaching; };
+    const explain = (c, s) => { const sol = solve(c), v = c.values, f = (x, d = 2) => x.toFixed(d);
+      if (s === 0) { const lim = v.lln != null ? `its lower limit of normal (${f(sol.limit)})` : '0.70';
+        if (sol.pattern === 'obstructive') return `FEV1/FVC = ${f(v.fev1)} / ${f(v.fvc)} = ${f(sol.ratio)}, below ${lim}: obstructive.`;
+        if (sol.pattern === 'mixed') return `FEV1/FVC = ${f(sol.ratio)} is below ${lim}, so there is obstruction, and the total lung capacity is only ${Math.trunc(v.tlcpct)}% of predicted, so there is restriction too: a mixed pattern.`;
+        if (sol.pattern === 'restrictive') return `FEV1/FVC is ${f(sol.ratio)} (normal or high) but ${v.tlcpct != null ? 'TLC is only ' + Math.trunc(v.tlcpct) + '%' : 'FVC is only ' + Math.trunc(v.fvcpct) + '%'} of predicted: a restrictive pattern.`;
+        if (sol.pattern === 'fixedUpper') return `The ratio is ${f(sol.ratio)}, which looks obstructive, but the loop is flat-topped on both limbs with a very low peak flow: fixed upper airway obstruction.`;
+        if (sol.pattern === 'variableExtrathoracic') return 'Only the inspiratory limb is flattened. Negative pressure during inspiration narrows an extrathoracic airway (above the sternal notch), while forced expiration holds it open: variable extrathoracic obstruction.';
+        if (sol.pattern === 'variableIntrathoracic') return 'Only the expiratory limb is flattened. Positive pleural pressure during forced expiration compresses an intrathoracic airway (below the sternal notch), while inspiration holds it open: variable intrathoracic obstruction.';
+        if (v.lln != null && sol.ratio < 0.7) return `The ratio ${f(sol.ratio)} is under the fixed 0.70 cut-off but above this patient's lower limit of normal (${f(sol.limit)}), and FVC is ${Math.trunc(v.fvcpct)}% of predicted: normal for age, not obstruction.`;
+        return `Ratio ${f(sol.ratio)} and FVC ${Math.trunc(v.fvcpct)}% of predicted are both normal.`; }
+      if (s === 1) { if (v.postFev1 == null) return 'No post-bronchodilator test was done, so reversibility cannot be judged.'; const d = v.postFev1 - v.fev1, verdict = sol.rev === 'yes' ? 'significant' : 'not significant';
+        return c.bdRule === 'ats2022' ? `FEV1 changed by ${f(d)} L, which is ${f(sol.dpp, 1)}% of the predicted FEV1 (${f(d / v.fev1 * 100, 0)}% of the starting value). The 2022 ERS/ATS threshold is more than 10% of the predicted value, so the response is ${verdict}.` : `FEV1 changed by ${f(d)} L (${f(d / v.fev1 * 100, 0)}%). The thresholds are 12% and 200 mL, so the response is ${verdict}.`; }
+      if (s === 2) { if (v.dlcopct == null) return 'DLCO was not measured.';
+        if (sol.corrected != null) return `Measured DLCO is ${Math.trunc(v.dlcopct)}% of predicted. With hemoglobin ${f(v.hb, 1)} g/dL the corrected value is ${Math.round(sol.corrected)}%: ${sol.dlco === 'low' ? 'still reduced' : sol.dlco === 'high' ? 'raised' : 'normal, so the low raw value came from too little hemoglobin to bind carbon monoxide, not from lung disease'}.`;
+        return sol.dlco === 'low' ? `DLCO is ${Math.trunc(v.dlcopct)}% of predicted: reduced, so the alveolar-capillary surface or the pulmonary vessels are affected.` : sol.dlco === 'high' ? `DLCO is ${Math.trunc(v.dlcopct)}% of predicted: raised. A high value points to more blood or hemoglobin taking up carbon monoxide (polycythemia, a left-to-right shunt or bleeding into the alveoli).` : `DLCO is ${Math.trunc(v.dlcopct)}% of predicted: normal, so the lung tissue and its blood supply are intact.`; }
+      return c.teaching; };
     function render() {
       const c = data.cases[ci];
       let h = `<div class="opts" style="grid-auto-flow:column;grid-auto-columns:max-content;overflow:auto;margin-bottom:10px" id="pick"></div><p class="serif" style="font-size:17px;margin:6px 0 10px">${esc(c.vignette)}</p>${svg(c)}`;
-      const v = c.values; h += `<div class="ticket" style="grid-template-columns:repeat(3,1fr)"><div><b>${v.fev1.toFixed(2)}</b><span>FEV1 L (${v.fevpct || v.fev1pct}%)</span></div><div><b>${v.fvc.toFixed(2)}</b><span>FVC L (${v.fvcpct}%)</span></div><div><b>${(v.fev1 / v.fvc).toFixed(2)}</b><span>FEV1/FVC</span></div><div><b>${v.postFev1 != null ? v.postFev1.toFixed(2) : 'n/a'}</b><span>post-BD FEV1</span></div><div><b>${v.dlcopct != null ? v.dlcopct + '%' : 'n/a'}</b><span>DLCO</span></div><div><b>${v.tlcpct != null ? v.tlcpct + '%' : 'n/a'}</b><span>TLC</span></div></div>`;
+      const v = c.values; h += `<div class="ticket" style="grid-template-columns:repeat(3,1fr)"><div><b>${v.fev1.toFixed(2)}</b><span>FEV1 L (${v.fevpct || v.fev1pct}%)</span></div><div><b>${v.fvc.toFixed(2)}</b><span>FVC L (${v.fvcpct}%)</span></div><div><b>${(v.fev1 / v.fvc).toFixed(2)}</b><span>FEV1/FVC${v.lln != null ? ' (LLN ' + v.lln.toFixed(2) + ')' : ''}</span></div><div><b>${v.postFev1 != null ? v.postFev1.toFixed(2) : 'n/a'}</b><span>post-BD FEV1</span></div><div><b>${v.dlcopct != null ? v.dlcopct + '%' : 'n/a'}</b><span>DLCO</span></div><div><b>${v.tlcpct != null ? v.tlcpct + '%' : 'n/a'}</b><span>TLC</span></div>${v.hb != null ? '<div><b>' + v.hb.toFixed(1) + '</b><span>Hb g/dL (' + (v.sex === 'f' ? 'female' : 'male') + ')</span></div>' : ''}</div>`;
       notes.forEach(n => h += `<div class="feedback" style="border-color:var(--good)"><b style="color:var(--good)">✓ ${titles[n[0]]}</b><br>${esc(n[1])}</div>`);
       if (step < 4) h += `<p class="serif" style="font-size:18px;margin:12px 0 0"><b>${titles[step]}</b></p><div class="opts" id="o"></div>`;
       else h += `<div class="feedback"><b>${esc(c.cause)}</b><br><small>${srcLinks(c.sources)}</small></div>`;
