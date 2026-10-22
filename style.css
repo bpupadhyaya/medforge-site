@@ -261,3 +261,4 @@ footer.site .fcopy p{margin:0}
 body{padding-bottom:var(--footh,110px)}
 @media (max-width:1180px){nav.main{flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}nav.main::-webkit-scrollbar{display:none}}
 @media (max-width:760px){footer.site .flinks{flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;justify-content:flex-start;scrollbar-width:none}footer.site .flinks::-webkit-scrollbar{display:none}header.site .in{padding:8px 16px}}
+.shelf li b{margin-right:0}.shelf li span{display:block}
