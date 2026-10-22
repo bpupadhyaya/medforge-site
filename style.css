@@ -303,3 +303,22 @@ img,svg,video{max-width:100%}
 .stepper button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 table.given{width:100%;border-collapse:collapse;border:1px solid var(--rule);border-radius:12px;overflow:hidden;margin-top:.6rem}
 table.given td{padding:.65rem .8rem;font-size:1rem}table.given tr:nth-child(odd){background:var(--paper2)}
+/* ---- screenshot gallery (original app screens in a plain rounded frame) ---- */
+.shots{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:18px}
+.shot{margin:0}
+.shot img{display:block;width:100%;height:auto;border-radius:22px;border:1px solid var(--rule);box-shadow:var(--shadow);background:var(--card)}
+.shot figcaption{margin-top:8px;color:var(--soft);font-size:.9375rem}
+.shot.one{max-width:300px}
+.btn.soft[aria-pressed="true"]{background:var(--green-600);color:#fff}
+.shots{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.inapp{display:grid;grid-template-columns:1fr 240px;gap:28px;align-items:center}
+.inapp .shot.one{margin:0;justify-self:end;max-width:240px}
+@media (max-width:760px){.inapp{grid-template-columns:1fr}.inapp .shot.one{justify-self:start}}
+/* links inside running text are underlined so they never rely on colour alone */
+.prose p a,.prose li a,.fine a,.sechead p a,.step p a,.faq p a{text-decoration:underline;text-underline-offset:3px}
+.rules a{text-decoration:underline;text-underline-offset:3px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.shelf h2{font-size:1.3125rem;margin-bottom:2px}
+/* tablet widths: the brand never shrinks; the link row scrolls instead */
+.brand{flex:none}
+nav.main{min-width:0}
