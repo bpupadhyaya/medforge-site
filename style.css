@@ -238,3 +238,16 @@ table.pr th{font-size:13.5px}
 .apphero .sub{font-size:20px}.apphero p{font-size:18px}.apphero .pillw{font-size:16px}
 footer.site{font-size:16px}
 .side{color:var(--ink)}.soft,.card p,.step p,.sechead p,.lead,.fine,.crumbs{color:var(--soft)}
+
+/* ---- structure additions (reuse existing colours and sizes) ---- */
+.shelves{display:grid;gap:18px}
+.shelf{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:22px;box-shadow:var(--shadow)}
+.shelf h3{font-size:21px;margin-bottom:2px}.shelf>p{margin:0 0 14px;color:var(--soft);font-size:17px}
+.shelf ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.shelf li{border:1px solid var(--rule);border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:2px;background:var(--paper2)}
+.shelf li b{font-size:17px}.shelf li span{font-size:15.5px;color:var(--soft)}
+.shelf li.have{background:var(--green-100);border-color:var(--green-500)}.shelf li.have span a{font-weight:600}
+.faq details{background:var(--card);border:1px solid var(--rule);border-radius:14px;margin:0 0 10px;padding:0 18px}
+.faq summary{cursor:pointer;padding:16px 0;font-weight:700;font-size:18px;color:var(--green-900)}
+.faq details[open] summary{border-bottom:1px solid var(--rule)}
+.faq details p{margin:12px 0 16px;color:var(--soft);font-size:17px}
