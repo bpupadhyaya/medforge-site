@@ -129,13 +129,19 @@
 
   // ---- Neuro localizer (one case, choose site)
   window.initNeuro = function (root, data) {
-    const box = $(root), c = data.case; let wrong = [], done = false;
+    const box = $(root), c = data.case; let wrong = [], done = false, open = null;
+    const order = data.regionOrder || data.regions.map((_, i) => i);
     function render() {
-      box.innerHTML = `<div class="box"><h3>${esc(c.title)}</h3><ul class="clean">${c.findings.map(f => `<li>${esc(f)}</li>`).join('')}</ul></div><p class="hint" style="margin-top:12px">Where is the lesion?</p>`;
-      data.regions.forEach((r, ri) => {
-        box.appendChild(el('div', 'tag', esc(r)));
+      box.innerHTML = `<div class="box"><h3>${esc(c.title)}</h3><ul class="clean">${c.findings.map(f => `<li>${esc(f)}</li>`).join('')}</ul></div><p class="hint" style="margin-top:12px">Where is the lesion? Open a region, then choose a site.</p>`;
+      order.forEach(ri => {
+        const sites = data.sites.filter(s => s.region === ri), correctHere = done && sites.some(s => s.id === c.site), isOpen = open === ri || correctHere;
+        const misses = sites.filter(s => wrong.includes(s.id)).length;
+        const h = el('button', 'opt', `<b>${esc(data.regions[ri])}</b> <small style="font-weight:400;color:var(--soft)">${sites.length} sites${misses ? ', ' + misses + ' ruled out' : ''}</small> <span aria-hidden="true" style="float:right">${isOpen ? '▴' : '▾'}</span>`);
+        h.setAttribute('aria-expanded', isOpen ? 'true' : 'false'); h.onclick = () => { open = open === ri ? null : ri; render(); };
+        box.appendChild(h);
+        if (!isOpen) return;
         const o = el('div', 'opts'); o.style.margin = '6px 0 12px';
-        data.sites.filter(s => s.region === ri).forEach(s => {
+        sites.forEach(s => {
           const b = el('button', 'opt' + (wrong.includes(s.id) ? ' no' : '') + (done && s.id === c.site ? ' ok' : ''), `${esc(s.name)}<br><small style="font-weight:400;color:var(--soft)">${esc(s.note)}</small>`);
           b.disabled = done || wrong.includes(s.id);
           b.onclick = () => { if (s.id === c.site) done = true; else wrong.push(s.id); render(); }; o.appendChild(b);
